@@ -198,21 +198,27 @@ class NewClientApp:
             reader, writer = await asyncio.open_connection(SERVER_HOST, SERVER_PORT)
             self.set_connection_status('Connected')
             asyncio.create_task(self._receive_messages(reader, writer))
-            while True:
-                login_dialog = LoginDialog()
-                if login_dialog.exec() != QDialog.Accepted or not login_dialog.accepted:
-                    continue
-                username, password = login_dialog.get_credentials()
-                if username == 'admin' and password == 'admin123':
-                    sys.exit(0)
-                auth_data = {
-                    'type': 'auth',
-                    'username': username,
-                    'password': password
-                }
-                writer.write((json.dumps(auth_data) + '\n').encode())
-                await writer.drain()
-                break
+            
+            # Show login dialog immediately after connection
+            login_dialog = LoginDialog()
+            if login_dialog.exec() != QDialog.Accepted or not login_dialog.accepted:
+                writer.close()
+                await writer.wait_closed()
+                QTimer.singleShot(500, lambda: asyncio.ensure_future(self._connect_to_server()))
+                return
+                
+            username, password = login_dialog.get_credentials()
+            if username == 'admin' and password == 'admin123':
+                sys.exit(0)
+                
+            auth_data = {
+                'type': 'auth',
+                'username': username,
+                'password': password
+            }
+            writer.write((json.dumps(auth_data) + '\n').encode())
+            await writer.drain()
+            
         except Exception as e:
             self.set_connection_status('Disconnected')
             QTimer.singleShot(3000, lambda: asyncio.ensure_future(self._connect_to_server()))
